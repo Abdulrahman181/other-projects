@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# Scraped data and generated artifacts; keep source data outside Git unless explicitly reviewed
+sheglam_products.csv
+SHEGLAM.csv
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

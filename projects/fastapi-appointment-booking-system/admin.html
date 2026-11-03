@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Appointment Administration</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDEEE6; --ink:#16211b; --blue-deep:#1B3A5C; --blue-mid:#3D5A80;
+    --blue-line:rgba(27,58,92,0.18); --amber:#E8871E; --amber-deep:#c96f10;
+    --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans Arabic',sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--paper); color:var(--ink); font-family:var(--sans); min-height:100vh;}
+  .wrap{max-width:1000px; margin:0 auto; padding:32px 20px;}
+
+  /* Login screen */
+  #loginScreen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+  }
+  .login-box{
+    background:#fff; border:1px solid var(--blue-line); border-radius:4px;
+    padding:40px; width:100%; max-width:380px;
+  }
+  .login-box h1{font-size:20px; color:var(--blue-deep); margin-bottom:6px;}
+  .login-box p{font-size:13px; color:#6b756d; margin-bottom:24px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block; font-family:var(--mono); font-size:12px; color:var(--blue-mid); margin-bottom:6px;}
+  .field input{
+    width:100%; padding:11px 13px; border:1px solid #cfd3c6; border-radius:2px;
+    background:#fbfbf8; font-size:14px; font-family:var(--sans);
+  }
+  .field input:focus{outline:2px solid var(--amber); outline-offset:1px;}
+  .btn{
+    width:100%; font-family:var(--mono); font-weight:600; font-size:14px;
+    background:var(--amber); color:#1a1204; padding:13px; border-radius:2px;
+    border:1px solid var(--amber-deep); cursor:pointer;
+  }
+  .btn:hover{background:var(--amber-deep);}
+  .error-msg{color:#b3261e; font-size:13px; margin-top:12px; display:none;}
+
+  /* Dashboard screen */
+  #dashboard{display:none;}
+  .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:28px;}
+  .topbar h1{font-size:22px; color:var(--blue-deep);}
+  .logout-btn{
+    font-family:var(--mono); font-size:12px; background:transparent; color:var(--blue-deep);
+    border:1px solid var(--blue-line); padding:8px 16px; border-radius:2px; cursor:pointer;
+  }
+  .logout-btn:hover{border-color:var(--blue-deep);}
+  .stats{display:flex; gap:12px; margin-bottom:24px; flex-wrap:wrap;}
+  .stat-card{
+    background:#fff; border:1px solid var(--blue-line); border-radius:3px;
+    padding:16px 20px; flex:1; min-width:120px;
+  }
+  .stat-card .num{font-family:var(--mono); font-size:24px; color:var(--amber-deep); font-weight:600;}
+  .stat-card .label{font-size:12px; color:#6b756d; margin-top:4px;}
+
+  table{width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--blue-line);}
+  th{
+    font-family:var(--mono); font-size:11px; text-align:right; padding:12px 14px;
+    background:var(--blue-deep); color:var(--paper); letter-spacing:0.03em;
+  }
+  td{padding:12px 14px; font-size:13px; border-bottom:1px solid #e5e7de; vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:rgba(232,135,30,0.04);}
+  select.status-select{
+    font-family:var(--sans); font-size:12px; padding:5px 8px; border-radius:2px;
+    border:1px solid #cfd3c6; background:#fbfbf8;
+  }
+  .del-btn{
+    font-family:var(--mono); font-size:11px; color:#b3261e; background:transparent;
+    border:1px solid #e0a9a5; padding:5px 10px; border-radius:2px; cursor:pointer; margin-right:6px;
+  }
+  .del-btn:hover{background:#fdecea;}
+  .empty-state{text-align:center; padding:60px 20px; color:#6b756d; font-size:14px;}
+  .loading{text-align:center; padding:40px; color:var(--blue-mid); font-family:var(--mono); font-size:13px;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>Appointment Administration</h1>
+    <p>Sign in to view and manage incoming appointments</p>
+    <form id="loginForm">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn">Sign in</button>
+      <p class="error-msg" id="loginError">Incorrect username or password</p>
+    </form>
+  </div>
+</div>
+
+<div id="dashboard">
+  <div class="wrap">
+    <div class="topbar">
+      <h1>Incoming Appointments</h1>
+      <button class="logout-btn" id="logoutBtn">Sign out</button>
+    </div>
+    <div class="stats" id="statsRow"></div>
+    <div id="tableContainer"><div class="loading">Loading...</div></div>
+  </div>
+</div>
+
+<script>
+  // Replace this with the deployed backend URL
+  const API_URL = window.API_BASE_URL || "http://localhost:8000";
+
+  const loginScreen = document.getElementById('loginScreen');
+  const dashboard = document.getElementById('dashboard');
+  let token = sessionStorage.getItem('admin_token'); // cleared when the browser closes for improved security
+
+  function showDashboard(){
+    loginScreen.style.display = 'none';
+    dashboard.style.display = 'block';
+    loadBookings();
+  }
+
+  if(token){ showDashboard(); }
+
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const errorMsg = document.getElementById('loginError');
+    errorMsg.style.display = 'none';
+    try{
+      const res = await fetch(`${API_URL}/api/admin/login`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({username, password})
+      });
+      if(!res.ok) throw new Error('Login failed');
+      const data = await res.json();
+      token = data.access_token;
+      sessionStorage.setItem('admin_token', token);
+      showDashboard();
+    }catch(err){
+      errorMsg.style.display = 'block';
+    }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    sessionStorage.removeItem('admin_token');
+    token = null;
+    dashboard.style.display = 'none';
+    loginScreen.style.display = 'flex';
+  });
+
+  async function loadBookings(){
+    const container = document.getElementById('tableContainer');
+    try{
+      const res = await fetch(`${API_URL}/api/admin/bookings`, {
+        headers: {'Authorization': `Bearer ${token}`}
+      });
+      if(res.status === 401){
+        sessionStorage.removeItem('admin_token');
+        token = null;
+        dashboard.style.display = 'none';
+        loginScreen.style.display = 'flex';
+        return;
+      }
+      const bookings = await res.json();
+      renderStats(bookings);
+      renderTable(bookings);
+    }catch(err){
+      container.innerHTML = '<div class="empty-state">Could not connect to the server. Make sure the API is running.</div>';
+    }
+  }
+
+  function renderStats(bookings){
+    const total = bookings.length;
+    const newCount = bookings.filter(b => b.status === 'New').length;
+    const confirmed = bookings.filter(b => b.status === 'Confirmed').length;
+    document.getElementById('statsRow').innerHTML = `
+      <div class="stat-card"><div class="num">${total}</div><div class="label">Total appointments</div></div>
+      <div class="stat-card"><div class="num">${newCount}</div><div class="label">New requests</div></div>
+      <div class="stat-card"><div class="num">${confirmed}</div><div class="label">Confirmed appointments</div></div>
+    `;
+  }
+
+  function renderTable(bookings){
+    const container = document.getElementById('tableContainer');
+    if(bookings.length === 0){
+      container.innerHTML = '<div class="empty-state">No appointments yet.</div>';
+      return;
+    }
+    const statuses = ['New', 'Contacted', 'Confirmed', 'Cancelled'];
+    container.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Name</th><th>Phone</th><th>Email</th><th>Service</th>
+          <th>Requested date</th><th>Details</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${bookings.map(b => `
+            <tr data-id="${b.id}">
+              <td>${escapeHtml(b.name)}</td>
+              <td>${escapeHtml(b.phone)}</td>
+              <td>${escapeHtml(b.email)}</td>
+              <td>${escapeHtml(b.service)}</td>
+              <td>${escapeHtml(b.preferred_date)}</td>
+              <td>${escapeHtml(b.details || '—')}</td>
+              <td>
+                <select class="status-select" onchange="updateStatus(${b.id}, this.value)">
+                  ${statuses.map(s => `<option value="${s}" ${s===b.status?'selected':''}>${s}</option>`).join('')}
+                </select>
+              </td>
+              <td><button class="del-btn" onclick="deleteBooking(${b.id})">Delete</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  window.updateStatus = async function(id, status){
+    await fetch(`${API_URL}/api/admin/bookings/${id}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+      body: JSON.stringify({status})
+    });
+    loadBookings();
+  };
+
+  window.deleteBooking = async function(id){
+    if(!confirm('Delete this appointment?')) return;
+    await fetch(`${API_URL}/api/admin/bookings/${id}`, {
+      method: 'DELETE',
+      headers: {'Authorization': `Bearer ${token}`}
+    });
+    loadBookings();
+  };
+</script>
+
+</body>
+</html>
